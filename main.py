@@ -3,7 +3,7 @@
 # @Author: Rekord
 # @Date: 2022-02-06
 
-
+import getpass
 import time
 import datetime
 import json
@@ -28,10 +28,11 @@ def main_handler(data=None, extend=None):
             # Time converted to UTC/GMT+08:00
             today = datetime.datetime.today() + datetime.timedelta(hours=8-int(time.strftime('%z')[0:3]))
             msg = f"%d-%02d-%02d %02d:%02d {nickname}|yiban punch：" % (today.year, today.month, today.day, today.hour, today.minute)
-            address_info = data['FormInfo']['AddressInfo']
+            form_info = data['FormInfo']
+            task_title = f'{today.month}月{today.day}日体温检测'
             try:
-                yiban = Yiban(data['UserInfo']['Mobile'], data['UserInfo']['Password'], today)
-                yiban.submit_task(address_info)
+                yiban = Yiban(data['UserInfo']['Mobile'], data['UserInfo']['Password'], task_title, today)
+                yiban.submit_task(form_info)
                 msg = f'{msg}Success.'
             # If an error occurs due to network problems, the program will continue to run
             except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError) as e:
@@ -49,5 +50,20 @@ def main_handler(data=None, extend=None):
     start_email(total_msg)
 
 
+def analyse_form():
+    info = {}
+    info['account'] = input("请输入手机号：")
+    info['password'] =getpass.getpass("请输入密码：") 
+    
+    yiban = Yiban(info['account'], info['password'], datetime.datetime.today() + datetime.timedelta(hours=8-int(time.strftime('%z')[0:3])))
+    # 根据自身情况考虑是否传参
+    yiban.analyse()
+
+
+
 if __name__ == '__main__':
+    # if you want to analyse your own specific form.
+    # please uncomment the following line.
+    # analyse_form()
+
     main_handler()

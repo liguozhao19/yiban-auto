@@ -4,6 +4,7 @@ csust易班校本化自动健康打卡.【[English](README_en.md)】
 ## 目录
 - [免责声明](#免责声明)
 - [用法](#用法)
+- [待办](#待办)
 - [参考](#参考)
 - [协议](#协议)
 
@@ -14,6 +15,8 @@ csust易班校本化自动健康打卡.【[English](README_en.md)】
 - 如有侵权，请提供相关证明，所有权证明，本人收到后删除相关文件。
 - 无论以任何方式查看、复制或使用到本项目中的任何脚本，都应该仔细阅读此声明。本人保留随时更改或补充此免责声明的权利。
 - 一旦使用并复制了本项目的任何相关脚本，则默认视为您已经接受了此免责声明。
+
+
 ## 用法
 ### 1. 安装依赖
 ```python
@@ -30,6 +33,23 @@ pip install -r requirements.txt
 ```python
 python main.py
 ```
+
+### 4. 考虑使用 GitHub Action 实现每日定时打卡
+- 1. 编辑[main.yml](.github/workflows/main.yml)文件并去掉第五行和和第六行的注释。
+- 2. 编辑第六行的 **`- cron`**，选择一个适当的定时时间。
+    > 关于`cron`的含义和用法可参考[https://jasonet.co/posts/scheduled-actions/](https://jasonet.co/posts/scheduled-actions/)
+
+### 5. 自定义表单
+- 调用[main.py](main.py)文件中的`analyse_form()`方法，从而得到自己特定的表单提交规范
+    > 请仔细查看`analyse_form()`方法的实现。
+- 更改[yiban.py](yiban.py)文件中的`auto_fill_form`方法，并相应的修改[配置文件](config.json)
+    > 真的很简单！
+> **自定义表单成功的案例欢迎pr！**
+
+
+## 待办
+- [ ] 添加命令参数
+
 ## 参考
 - [Sricor/Yiban](https://github.com/Sricor/Yiban)
 - [apecodex/yibanAutoSgin](https://github.com/apecodex/yibanAutoSgin)

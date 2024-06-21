@@ -36,10 +36,11 @@ class Yiban():
     COOKIES = {"csrf_token": CSRF}  # 固定cookie 无需更改
     HEADERS = {"Origin": "https://c.uyiban.com", "User-Agent": "Yiban", "AppVersion": "5.0"}  # 固定头 无需更改    
               
-    def __init__(self, mobile, password, today=datetime.datetime.today() + datetime.timedelta(hours=8-int(time.strftime('%z')[0:3]))):
+    def __init__(self, mobile, password, task_title, today=datetime.datetime.today() + datetime.timedelta(hours=8-int(time.strftime('%z')[0:3]))):
         self.session = requests.session()
         self.mobile = mobile
         self.password = password
+        self.task_title = task_title
         self.today = today
         self.login()
 
@@ -78,26 +79,22 @@ class Yiban():
 
     def login(self):
         resp = self.req(
-            method= 'post',
-            url = 'https://mobile.yiban.cn/api/v4/passport/login',
+            method = 'post',
+            url = 'https://www.yiban.cn/login/doLoginAjax',
             data = {
-                'ct':       '2',
-                'identify': '1',
-                'mobile':   self.mobile,
-                'password': rsa_encrypt(self.RSA_KEY, self.password),
+                'account':self.mobile,
+                'password':self.password,
             }
-        ).json()
-        # print(resp)
-        if resp['response'] == 100:
-            self.name = resp['data']['user']['name']
-            self.access_token = resp['data']['access_token']
-            print(self.name, "login success!")
+        )
+        if resp.json()['code'] == 200:
+            # get yiban_user_token
+            self.access_token = requests.utils.dict_from_cookiejar(resp.cookies)['yiban_user_token']
         else:
             self.session.close()    # close session
             raise Exception(f'login fail, the mobile or password is wrong.')
     
 
-    def submit_task(self, address_info):
+    def submit_task(self, form_info):
         # 校本化认证
         self.auth()
 
@@ -106,15 +103,15 @@ class Yiban():
         # # 获取已完成任务列表
         # print("completed task list: ", self.getCompletedList())
         
-        self.auto_fill_form(self.getUncompletedList(), address_info)
+        self.auto_fill_form(self.getUncompletedList(), form_info)
 
 
     def auth(self):
         # 校本化认证
         resp = self.req(
-            url='http://f.yiban.cn/iapp/index', 
+            url='http://f.yiban.cn/iframe/index', 
             params={'act': 'iapp7463'},
-            cookies={'loginToken': self.access_token},
+            cookies={'yiban_user_token': self.access_token},
             allow_redirects=False
         )
         verify = re.findall(r"verify_request=(.*?)&", resp.headers.get("Location"))[0]
@@ -172,12 +169,10 @@ class Yiban():
         return resp
 
 
-    def auto_fill_form(self, resp, address_info):
-        # generate task title
-        task_title = f'{self.today.month}月{self.today.day}日体温检测'
+    def auto_fill_form(self, resp, form_info):
         # traverse task list
         for i in resp['data']:
-            if i['Title'] == task_title:
+            if i['Title'] == self.task_title:
                 task_detail = self.req(
                     url='https://api.uyiban.com/officeTask/client/index/detail', 
                     params={'TaskId': i['TaskId'], 'CSRF': self.CSRF}
@@ -195,27 +190,45 @@ class Yiban():
                         {"label": "发布人", "value": task_detail["PubPersonName"]}
                     ]
                 }
-                data_form = { 
-                    "c77d35b16fb22ec70a1f33c315141dbb": "%d-%02d-%02d %02d:%02d" % (self.today.year, self.today.month, self.today.day, self.today.hour, self.today.minute), 
-                    "2d4135d558f849e18a5dcc87b884cce5": str(round(random.uniform(35.2, 35.8), 1)),
-                #     "ffcf6cdef0e8d2992add5497f4cf438c": "%d-%02d-%02d %02d:%02d" % (self.today.year, self.today.month, self.today.day, self.today.hour+12, self.today.minute),
-                #     "9a080e8acb1424067b0927ab2347c2ee": str(round(random.uniform(35.2, 35.8), 1)),
-                #     "27a2a4cdf16a8c864daca54a00c4db03": {
-                #         "name": address_info['name'],
-                #         "location": address_info['location'],
-                #         "address": address_info['address']
-                #     }
-                    "fa725575fec9f7486a466a53d91029f1": "%d-%02d-%02d" % (self.today.year, self.today.month, self.today.day),
-                    "a3d09d9513e5d38834f8e566a145bd8c": str(round(random.uniform(35.2, 35.8), 1)),
-                    "d4ef7a8aa15b5a77ac2bae34b9275ef5": [
-                        address_info['location1'], 
-                        address_info['location2'],
-                        address_info['location3']
-                    ],
-                    "3abb950fb0730c739d3f637f3d5389b3": "是",
-                    "5981782c74bd2d049e45517390841bfd": None,
-                    "36546c2d23ea21c275a2fcb9710b4946": None,
-                    "9a9b31134b721ab46f4c6d383d7403b2": None,
+                data_form = {
+                    # 22.8.31/22.10.11 知晓并承诺
+                    "38df3554797feb3bee44085f97d12415": '是',
+                    # 22.8.31/22.10.11 是否到校
+                    "3997e429ef32611e7d0c6b8eabdaad7b": '是',
+                    # 22.8.31/22.10.11 体温
+                    "b201c112a5789abb8ffcb8eb2d83a2e3": str(round(random.uniform(35.2, 35.8), 1)),
+                    # 22.10.14/22.10.17 体温
+                    "273d12ffa488129e810ff610d430ac62": str(round(random.uniform(35.2, 35.8), 1)),
+                    # 22.10.16 体温
+                    "934ba45bc2d052dbbe2280cbbb864a3b": str(round(random.uniform(35.2, 35.8), 1)),
+                    # 22.8.31/22.10.11 地图选址
+                    "babc320d498749758fb5f97521e40920": {
+                        "name": self.get_value_from_key(self.get_value_from_key(form_info, "AddressInfo2"), "name"),
+                        "location": self.get_value_from_key(self.get_value_from_key(form_info, "AddressInfo2"), "location"),
+                        "address": self.get_value_from_key(self.get_value_from_key(form_info, "AddressInfo2"), "address")
+                    },
+                    # 22.10.14/22.10.17 所处位置
+                    "6a99c40fd0ed9849cbcdbb3dc1e86b01": {
+                        "name": self.get_value_from_key(self.get_value_from_key(form_info, "AddressInfo2"), "name"),
+                        "location": self.get_value_from_key(self.get_value_from_key(form_info, "AddressInfo2"), "location"),
+                        "address": self.get_value_from_key(self.get_value_from_key(form_info, "AddressInfo2"), "address")
+                    },
+                    # 22.10.16 所处位置
+                    "742da230bb2e718352cf198a974b1423": {
+                        "name": self.get_value_from_key(self.get_value_from_key(form_info, "AddressInfo2"), "name"),
+                        "location": self.get_value_from_key(self.get_value_from_key(form_info, "AddressInfo2"), "location"),
+                        "address": self.get_value_from_key(self.get_value_from_key(form_info, "AddressInfo2"), "address")
+                    },
+                    # 22.10.11 是否参与10月9日全员核酸检测
+                    "c05562191b7d1de1673f86ad426fa5d8": '是',
+                    # 22.10.16 10月15日核酸是否采样
+                    "d5bd2fbde30e746767562c24e268fdd7": '是',
+                    # 22.8.31/22.10.11 健康码截图
+                    "9a6da1b5c2519032945d1048a60d75f9": self.get_picture("9a6da1b5c2519032945d1048a60d75f9"),
+                    # 22.10.16 核酸截图
+                    "9d6e37b98f6d06d8cb30146871d5d0d0": self.get_picture("9d6e37b98f6d06d8cb30146871d5d0d0"),
+                    # 22.8.31 行程码截图
+                    "9f87836748d6788550624c40a0409b93": self.get_picture("9f87836748d6788550624c40a0409b93"),
                 }
 
                 submit_data = {}
@@ -238,22 +251,19 @@ class Yiban():
                 break
 
 
-    "通过此函数可以分析已提交的表单数据"
     def view_completed(self, InitiateId):
-        print(self.req(
+        return self.req(
             url=f'https://api.uyiban.com/workFlow/c/work/show/view/{InitiateId}',
             params={'CSRF': self.CSRF}
-        ).json()['data']['Initiate'])
+        ).json()['data']['Initiate']
 
     
-    def get_address(self, month=datetime.date.today().month, day=datetime.date.today().day):
+    def get_address(self):
         # 校本化认证
         self.auth()
-        # generate task title
-        task_title = f'{month}月{day}日体温检测'
         # traverse task list
         for i in self.getCompletedList()['data']:
-            if i['Title'] == task_title:
+            if i['Title'] == self.task_title:
                 InitiateId = self.req(
                     url='https://api.uyiban.com/officeTask/client/index/detail', 
                     params={'TaskId': i['TaskId'], 'CSRF': self.CSRF}
@@ -261,5 +271,56 @@ class Yiban():
                 print(self.req(
                     url=f'https://api.uyiban.com/workFlow/c/work/show/view/{InitiateId}',
                     params={'CSRF': self.CSRF}
-                ).json()['data']['Initiate']['FormDataJson'][2]['value'])
+                ).json()['data']['Initiate']['FormDataJson'])
                 break
+
+
+    def get_value_from_key(self, dict, key):
+        try:
+            return dict[key]
+        except KeyError:
+            return None            
+
+
+    # get the pricture of assigned date, default yesterday
+    def get_picture(self, id, 
+        day = datetime.datetime.today() + datetime.timedelta(hours=8-int(time.strftime('%z')[0:3])) - datetime.timedelta(days=1)):
+        # regenerate task title
+        task_title = f'{day.month}月{day.day}日体温检测'
+        # task_title = '每日健康打卡'
+        try: 
+            resp = self.getCompletedList()
+            # traverse task list
+            for i in resp['data']:
+                if i['Title'] == task_title:
+                    task_detail = self.req(
+                        url='https://api.uyiban.com/officeTask/client/index/detail', 
+                        params={'TaskId': i['TaskId'], 'CSRF': self.CSRF}
+                    ).json()['data']
+
+                    form_data_json = self.view_completed(task_detail['InitiateId'])['FormDataJson']
+                    for item in form_data_json:
+                        if item['id'] == id:
+                            return item['value']
+        except Exception:
+            return None
+
+
+    # 分析自定义表单，默认时间为“今天”，默认任务标题为“{day.month}月{day.day}日体温检测”
+    def analyse(self, day = datetime.datetime.today() + datetime.timedelta(hours=8-int(time.strftime('%z')[0:3]))):
+        # 校本化认证
+        self.auth()
+
+        task_title = f'{day.month}月{day.day}日体温检测'
+        resp = self.getCompletedList()
+        # traverse task list
+        for i in resp['data']:
+            if i['Title'] == task_title:
+                task_detail = self.req(
+                    url='https://api.uyiban.com/officeTask/client/index/detail', 
+                    params={'TaskId': i['TaskId'], 'CSRF': self.CSRF}
+                ).json()['data']
+
+                # print(task_detail)
+                # print(self.view_completed(task_detail['InitiateId']))
+                print(self.view_completed(task_detail['InitiateId'])['FormDataJson'])
